@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义规则数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-format@3.1.0/dist/d3-format.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #4ca1af, #c4e0e5);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: rgba(25, 35, 45, 0.7);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-title {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #4ca1af;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .file-input {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .file-input label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .file-input-btn {
+            background: rgba(76, 161, 175, 0.3);
+            border: 1px solid rgba(76, 161, 175, 0.5);
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-input-btn:hover {
+            background: rgba(76, 161, 175, 0.5);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .config-input {
+            width: 100%;
+            height: 200px;
+            background: rgba(40, 60, 80, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px;
+            color: #e0e0e0;
+            font-family: monospace;
+            resize: vertical;
+        }
+
+        button {
+            background: rgba(76, 161, 175, 0.7);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: rgba(76, 161, 175, 0.9);
+        }
+
+        .chart-container {
+            background: rgba(25, 35, 45, 0.7);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            height: 700px;
+            margin-bottom: 30px;
+        }
+
+        .data-table {
+            background: rgba(25, 35, 45, 0.7);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #4ca1af;
+        }
+
+        .error {
+            color: #ff6b6b;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>自定义规则数据可视化</h1>
+            <p>上传Excel文件并配置换算规则，生成可视化图表</p>
+        </header>
+
+        <div class="control-panel">
+            <div class="panel file-panel">
+                <h2 class="panel-title">数据文件</h2>
+                <div class="file-input">
+                    <label>
+                        <div class="file-input-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" style="margin-right: 8px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            选择Excel文件
+                            <input type="file" id="excel-file" accept=".xlsx,.xls,.csv">
+                        </div>
+                    </label>
+                    <div id="file-name" style="color: #a0a0a0; font-size: 0.9rem;">未选择文件</div>
+                </div>
+            </div>
+
+            <div class="panel config-panel">
+                <h2 class="panel-title">换算规则配置</h2>
+                <textarea id="config-json" class="config-input" placeholder="在此粘贴JSON配置...">{
+    "fields": {
+        "情绪温度": {
+            "divisor": 1,
+            "description": "直接使用原始值"
+        },
+        "上证涨幅": {
+            "divisor": 0.001,
+            "offset": 50,
+            "displayFormat": "+0.00%;-0.00%",
+            "description": "0%=50，+0.1%=+1，-0.1%=-1"
+        },
+        "昨日涨停表现": {
+            "divisor": 0.001,
+            "offset": 50,
+            "displayFormat": "+0.00%;-0.00%",
+            "description": "0%=50，+0.1%=+1，-0.1%=-1"
+        },
+        "微盘股涨幅": {
+            "divisor": 0.001,
+            "offset": 50,
+            "displayFormat": "+0.00%;-0.00%",
+            "description": "0%=50，+0.1%=+1，-0.1%=-1"
+        },
+        "红个股数量": {
+            "divisor": 100,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        
+        "跌幅-5数量": {
+            "divisor": 2,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        "涨停个股": {
+            "divisor": 1,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        "跌停个股": {
+            "divisor": 0.1,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        "封板率": {
+            "divisor": 1,
+            "multiplier": 100,
+            "displayFormat": "%",
+            "description": "原值*100转换为百分比"
+        },
+        "一字板数量": {
+            "divisor": 0.1,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        "连板个股": {
+            "divisor": 0.2,
+            "displayFormat": "0",
+            "description": "直接显示实际数量"
+        },
+        "连板高度": {
+            "divisor": 0.1,
+            "displayFormat": "0",
+            "description": "直接显示实际高度"
+        },
+        "大盘资金": {
+            "divisor": 20000000000,
+            "multiplier": 1000000000000,
+            "displayFormat": "trillion",
+            "description": "原始值*1万亿"
+        },
+        "微盘资金": {
+            "divisor": 333333333,
+            "multiplier": 100000000,
+            "displayFormat": "hundredMillion",
+            "description": "原始值*1亿"
+        },
+        "涨停资金": {
+            "divisor": 1000000000,
+            "multiplier": 100000000,
+            "displayFormat": "hundredMillion",
+            "description": "原始值*1亿"
+        },
+        "连板资金": {
+            "divisor": 333333333,
+            "multiplier": 100000000,
+            "displayFormat": "hundredMillion",
+            "description": "原始值*1亿"
+        }
+    },
+    "colors": {
+        "上证涨幅": "#FF0000",
+        "昨日涨停表现": "#00FF00",
+        "情绪温度": "#FF6B6B",
+        "微盘股涨幅":"#FF00D1",
+        "微盘资金":"#65E8BD",
+        "红个股数量": "#4ECDC4",
+        "绿个股数量": "#FFD166",
+        "跌幅-5数量": "#6A0572",
+        "涨停个股": "#F45656",
+        "跌停个股": "#1A936F",
+        "封板率": "#118AB2",
+        "一字板数量": "#ABE555",
+        "连板个股": "#EF476F",
+        "连板高度": "#FFD166",
+        "大盘资金": "#06D6A0",
+        "涨停资金": "#118AB2",
+        "连板资金": "#11ABB2"
+    },
+    "yAxis": {
+        "min": 0,
+        "max": 100,
+        "splitNumber": 10
+    }
+}</textarea>
+                <div id="config-error" class="error"></div>
+                <button id="apply-config">应用配置</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="animate-spin" style="animation: spin 1s linear infinite;">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+            </svg>
+            <p>正在处理数据...</p>
+        </div>
+
+        <div class="chart-container" id="main-chart"></div>
+
+
+    </div>
+
+    <script>
+        // 初始化ECharts实例
+        const chartDom = document.getElementById('main-chart');
+        const myChart = echarts.init(chartDom);
+
+        // DOM元素
+        const fileInput = document.getElementById('excel-file');
+        const fileNameDisplay = document.getElementById('file-name');
+        const configTextarea = document.getElementById('config-json');
+        const applyConfigBtn = document.getElementById('apply-config');
+        const configError = document.getElementById('config-error');
+        const loading = document.getElementById('loading');
+        const tableContainer = document.getElementById('table-container');
+
+        // 全局变量
+        let currentData = null;
+        let currentConfig = null;
+        let currentHeaders = [];
+        let hoveredSeriesIndex = -1; // 新增：存储当前悬停的系列索引
+
+        // 文件选择事件处理
+        fileInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileNameDisplay.textContent = `已选择: ${file.name}`;
+            loading.style.display = 'block';
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // 获取第一个工作表
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+
+                    // 获取表头
+                    const headers = [];
+                    const range = XLSX.utils.decode_range(worksheet['!ref']);
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
+                        headers.push(cell ? cell.v : `列${C + 1}`);
+                    }
+
+                    // 将工作表转换为JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: headers, range: 1 });
+
+                    currentData = jsonData;
+                    currentHeaders = headers;
+
+                    // 尝试自动应用配置
+                    tryApplyConfig();
+
+                    // 创建表格预览
+                    createDataTable(jsonData, headers);
+                } catch (error) {
+                    console.error('Error processing Excel file:', error);
+                    alert('处理Excel文件时出错: ' + error.message);
+                } finally {
+                    loading.style.display = 'none';
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        // 应用配置按钮事件
+        applyConfigBtn.addEventListener('click', function () {
+            try {
+                const config = JSON.parse(configTextarea.value);
+                currentConfig = config;
+                configError.textContent = '';
+                alert('配置应用成功！');
+
+                // 如果有数据，重新处理
+                if (currentData) {
+                    processAndDisplayData(currentData, currentHeaders, config);
+                }
+            } catch (error) {
+                configError.textContent = '配置JSON格式错误: ' + error.message;
+                console.error('Config parse error:', error);
+            }
+        });
+
+        // 尝试自动应用配置
+        function tryApplyConfig() {
+            try {
+                const config = JSON.parse(configTextarea.value);
+                currentConfig = config;
+                configError.textContent = '';
+
+                // 处理并显示数据
+                if (currentData) {
+                    processAndDisplayData(currentData, currentHeaders, config);
+                }
+            } catch (error) {
+                console.log('自动应用配置失败，等待手动应用');
+            }
+        }
+
+        // 数据处理和显示函数
+        function processAndDisplayData(rawData, headers, config) {
+            if (!rawData || rawData.length === 0) {
+                alert('没有可处理的数据');
+                return;
+            }
+
+            if (!config || !config.fields) {
+                alert('请先配置换算规则');
+                return;
+            }
+
+            loading.style.display = 'block';
+
+            try {
+                // 转换数据
+                const transformedData = rawData.map(row => transformRow(row, headers, config.fields));
+
+                // 找到生成日期标签的代码部分，替换为以下代码
+                const dateField = headers.find(h => h.includes('日期')) || headers[0];
+                const weekField = headers.find(h => h.includes('星期')) || headers[1];
+                const industryField = headers.find(h => h.includes('涨停最多行业')); // 找到涨停最多行业字段
+
+                const dates = rawData.map(row => {
+                    const dateStr = String(row[dateField] || '');
+                    const weekStr = row[weekField] || '';
+                    const industryStr = industryField ? row[industryField] || '' : ''; // 获取涨停最多行业内容
+                    const industryStrs = industryStr.split(' ')
+                    if (industryStrs.length > 1) {
+                        return `${dateStr} (周${weekStr})\n${industryStrs.join('\n')}`; // 添加涨停最多行业内容到日期标签
+                    }
+                    return `${dateStr} (周${weekStr})\n${industryStr}`; // 添加涨停最多行业内容到日期标签
+                });
+
+                // 准备系列数据
+                const series = [];
+                const legendData = [];
+
+                // 为每个配置的字段创建系列
+                Object.entries(config.fields).forEach(([fieldName, fieldConfig]) => {
+                    if (headers.includes(fieldName)) {
+                        let labelConfig = {};
+                        if (fieldName === '情绪温度') {
+                            labelConfig = {
+                                show: true,
+                                position: 'top',
+                                color: '#fff', // 白色字体
+                                textBorderColor: '#000', // 黑色描边
+                                textBorderWidth: 1, // 描边宽度
+                                fontSize: 30
+                            };
+                        }
+                        series.push({
+                            name: fieldName,
+                            type: 'line',
+                            smooth: true,
+                            symbol: 'circle',
+                            symbolSize: 8,
+                            data: transformedData.map(d => ({
+                                value: d.transformed[fieldName],
+                                original: d.original[fieldName],
+                                displayFormat: fieldConfig.displayFormat
+                            })),
+                            lineStyle: { width: fieldConfig.lineWidth || 2 },
+                            itemStyle: { color: config.colors?.[fieldName] || getRandomColor() },
+                            label: labelConfig // 添加标签配置
+                        });
+                        legendData.push(fieldName);
+                    }
+                });
+
+                // 配置图表
+                const option = {
+                    tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(30, 40, 50, 0.9)',
+            borderColor: 'rgba(80, 140, 200, 0.5)',
+            borderWidth: 1,
+            textStyle: { color: '#e0e0e0' },
+            formatter: function (params) {
+                const dataIndex = params[0].dataIndex;
+                const row = rawData[dataIndex];
+                
+                let result = `<div style="font-weight:bold;margin-bottom:10px;">${params[0].name}</div>`;
+                
+                // 添加板块前5和概念前5的内容
+                const plateField = headers.find(h => h.includes('行业前5'));
+                const conceptField = headers.find(h => h.includes('概念前5'));
+                const plateField2 = headers.find(h => h.includes('行业后5'));
+                
+                if (plateField && row[plateField]) {
+                    result += `<div style="margin-bottom:5px;">
+                        <span style="font-weight:bold;">板块前5:</span> ${row[plateField]}
+                    </div>`;
+                }
+
+                if (plateField2 && row[plateField2]) {
+                    result += `<div style="margin-bottom:5px;">
+                        <span style="font-weight:bold;">板块后5:</span> ${row[plateField2]}
+                    </div>`;
+                }
+                
+                if (conceptField && row[conceptField]) {
+                    result += `<div style="margin-bottom:5px;">
+                        <span style="font-weight:bold;">概念前5:</span> ${row[conceptField]}
+                    </div>`;
+                }
+                
+                // 保持原有系列数据的显示
+                params.forEach(param => {
+                    const data = param.data;
+                    let displayValue;
+
+                    if (data.original === null || data.original === undefined) {
+                        displayValue = '无数据';
+                    } else {
+                        if (data.displayFormat) {
+                            try {
+                                if (data.displayFormat.includes(';')) {
+                                    const formats = data.displayFormat.split(';');
+                                    if (data.original >= 0) {
+                                        displayValue = "+" + (data.original * 100).toFixed(2) + "%";
+                                    } else {
+                                        displayValue = "" + (data.original * 100).toFixed(2) + "%";
+                                    }
+                                } else if (data.displayFormat === "trillion") {
+                                    const num = parseFloat(data.original);
+                                    displayValue = num + '万亿';
+                                } else if (data.displayFormat === "hundredMillion") {
+                                    const num = parseFloat(data.original);
+                                    displayValue = num + '亿';
+                                } else {
+                                    const formatter = d3.format(data.displayFormat);
+                                    displayValue = formatter(data.original);
+                                }
+                            } catch (e) {
+                                console.warn('格式化错误:', e);
+                                displayValue = data.original;
+                            }
+                        } else {
+                            displayValue = data.original;
+                        }
+                    }
+
+                    // 使用存储的索引判断高亮
+                    const isHovered = param.seriesIndex === hoveredSeriesIndex;
+                    const highlightStyle = isHovered ? 'background-color: rgba(255, 255, 255, 0.2);' : '';
+
+                    result += `<div style="${highlightStyle}">
+                        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${param.color};margin-right:5px;"></span>
+                        ${param.seriesName}: <span style="font-weight:bold;color:${param.color};">${displayValue}</span>
+                    </div>`;
+                });
+                
+                return result;
+            }
+        },
+        legend: {
+    data: legendData,
+    textStyle: { color: '#a0a0a0' },
+    bottom: 10, // 固定距离底部的位置
+    orient: 'horizontal',
+    type: 'plain',
+    pageIconShow: false,
+    itemWidth: 80,
+    itemHeight: 20,
+    width: '90%', // 限制宽度，强制换行
+    maxColumn: 5, // 最多5列
+    itemGap: 10,
+    padding: [5, 0]
+  },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        bottom: '15%',
+                        top: '10%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: false,
+                        data: dates,
+                        axisLine: { lineStyle: { color: '#5a7a9a' } },
+                        axisLabel: { color: '#a0a0a0' }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: config.yAxis?.min || 0,
+                        max: config.yAxis?.max === "auto" ? null : (config.yAxis?.max || 100),
+                        axisLabel: { color: '#a0a0a0' },
+                        splitLine: { lineStyle: { color: 'rgba(100, 130, 160, 0.2)' } },
+                        splitNumber: config.yAxis?.splitNumber || 10
+                    },
+                    dataZoom: [
+                    { type: 'inside' }, // 内部缩放（鼠标滚轮,
+                        {
+                            type: 'slider',
+                            show: true,
+                            bottom: '10%',
+                            height: 20,
+                            handleSize: 15,
+                            handleStyle: { color: '#4ca1af' },
+                            fillerColor: 'rgba(76, 161, 175, 0.2)',
+                            borderColor: 'rgba(100, 130, 160, 0.5)',
+                            textStyle: { color: '#a0a0a0' }
+                        }
+                    ],
+                    series: series
+                };
+
+                // 应用配置项
+                myChart.setOption(option, true);
+
+                // 添加事件监听器，记录当前悬停的系列索引
+                myChart.on('mousemove', function (params) {
+                    if (params.componentType === 'series') {
+                        hoveredSeriesIndex = params.seriesIndex;
+                    }
+                });
+
+                // 鼠标移出时重置
+                myChart.on('mouseout', function (params) {
+                    hoveredSeriesIndex = -1;
+                });
+
+            } catch (error) {
+                console.error('数据处理错误:', error);
+                alert('数据处理错误: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // 转换单行数据
+        function transformRow(row, headers, fieldConfigs) {
+            const result = {
+                transformed: {},
+                original: {}
+            };
+
+            headers.forEach(header => {
+                if (fieldConfigs[header]) {
+                    const config = fieldConfigs[header];
+                    const rawValue = row[header];
+
+                    // 保存原始值
+                    result.original[header] = rawValue;
+
+                    // 跳过空值
+                    if (rawValue === null || rawValue === undefined || rawValue === '') {
+                        result.transformed[header] = null;
+                        return;
+                    }
+
+                    let value = parseFloat(rawValue) || 0;
+
+                    // 计算乘数
+                    if (config.multiplier) {
+                        value = value * config.multiplier;
+                    }
+
+                    // 计算除数
+                    if (config.divisor) {
+                        if (config.offsetValue) {
+                            value = (value - config.offsetValue) / config.divisor;
+                        } else {
+                            value = value / config.divisor;
+                        }
+
+                    }
+
+                    // 计算偏移量
+                    if (config.offset) {
+                        value = value + config.offset;
+                    }
+
+                    result.transformed[header] = value;
+                }
+            });
+
+            return result;
+        }
+
+        // 创建数据表格
+        function createDataTable(data, headers) {
+            if (!data || data.length === 0) {
+                tableContainer.innerHTML = '<p>没有可显示的数据</p>';
+                return;
+            }
+
+            // 创建表格HTML
+            let html = '<table><thead><tr>';
+
+            // 添加表头
+            headers.forEach(header => {
+                html += `<th>${header}</th>`;
+            });
+
+            html += '</tr></thead><tbody>';
+
+            // 添加数据行
+            data.forEach(row => {
+                html += '<tr>';
+                headers.forEach(header => {
+                    let value = row[header];
+
+                    // 格式化显示
+                    if (value === null || value === undefined) {
+                        value = '-';
+                    } else if (typeof value === 'number') {
+                        value = value.toFixed(4);
+                    }
+
+                    html += `<td>${value}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+           
+           // tableContainer.innerHTML = html;
+        }
+
+        // 生成随机颜色
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', function () {
+            myChart.resize();
+        });
+    </script>
+</body>
+
+</html>
